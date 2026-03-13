@@ -11,6 +11,7 @@ import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+
 @DisplayName("Terminal Buffer Specifications")
 class TerminalBufferTest {
 
@@ -21,7 +22,6 @@ class TerminalBufferTest {
 
     @BeforeEach
     void setUp() {
-        // Initialize a new buffer before EACH test to keep tests isolated
         buffer = new TerminalBuffer(WIDTH, HEIGHT, MAX_SCROLLBACK);
     }
 
@@ -65,7 +65,7 @@ class TerminalBufferTest {
             buffer.write("A");
 
             Cell writtenCell = buffer.getCellAt(0, 0, false);
-            assertEquals('A', writtenCell.character());
+            assertEquals("A", writtenCell.text());
             assertEquals(TerminalColor.RED, writtenCell.fgColor());
             assertEquals(TerminalColor.BLACK, writtenCell.bgColor());
             assertTrue(writtenCell.styles().contains(Style.BOLD));
@@ -74,13 +74,13 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Text exceeding screen width should wrap to the next line")
         void textShouldWrapToNextLine() {
-            buffer.write("1234567890A"); // 11 characters on a width of 10
+            buffer.write("1234567890A"); // 11 characters, width is 10
 
-            assertEquals(1, buffer.getCursorCol()); // Cursor moves to the second position in the new line
-            assertEquals(1, buffer.getCursorRow()); // Cursor is on the second row
+            assertEquals(1, buffer.getCursorCol());
+            assertEquals(1, buffer.getCursorRow());
 
             Cell firstCellNextLine = buffer.getCellAt(0, 1, false);
-            assertEquals('A', firstCellNextLine.character());
+            assertEquals("A", firstCellNextLine.text());
         }
     }
 
@@ -91,19 +91,14 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Writing past the last line should scroll up and preserve history")
         void writingPastBottomShouldScroll() {
-
-            // Fill the screen completely (HEIGHT rows * WIDTH characters)
             for (int i = 0; i < HEIGHT; i++) {
                 buffer.write("Line" + i + "-----");
             }
 
-            // After filling the screen, the next write should trigger scrollUp()
             String scrollbackLine = buffer.getLineAsString(0, true);
-            assertTrue(scrollbackLine.startsWith("Line0"), "The first line should be moved to scrollback");
+            assertTrue(scrollbackLine.startsWith("Line0"));
 
             buffer.write("Overflow");
-
-            // Cursor should remain on the last row
             assertEquals(HEIGHT - 1, buffer.getCursorRow());
             assertEquals(8, buffer.getCursorCol());
         }
@@ -111,13 +106,10 @@ class TerminalBufferTest {
         @Test
         @DisplayName("Scrollback should drop the oldest lines when max limit is reached")
         void scrollbackShouldRespectMaxSize() {
-
-            // Write enough lines to exceed the scrollback capacity
             for (int i = 0; i < HEIGHT + 4; i++) {
                 buffer.write("L" + i + "--------");
             }
 
-            // The oldest lines (L0, L1) should be dropped when the limit is exceeded
             String oldestInScrollback = buffer.getLineAsString(0, true);
             assertTrue(oldestInScrollback.startsWith("L2"),
                     "L0 and L1 should be dropped, L2 should be the oldest in scrollback");
@@ -137,6 +129,39 @@ class TerminalBufferTest {
             assertEquals(0, buffer.getCursorCol());
             assertEquals(0, buffer.getCursorRow());
             assertEquals(Cell.EMPTY, buffer.getCellAt(0, 0, false));
+        }
+    }
+
+    @Nested
+    @DisplayName("Wide Characters (CJK & Emojis)")
+    class WideCharacterTests {
+
+        @Test
+        @DisplayName("Writing a wide character should consume two columns and place a WIDE_FILLER")
+        void writingWideCharConsumesTwoColumns() {
+            buffer.write("字"); // CJK character
+            assertEquals(2, buffer.getCursorCol());
+
+            Cell firstCell = buffer.getCellAt(0, 0, false);
+            Cell secondCell = buffer.getCellAt(1, 0, false);
+
+            assertEquals("字", firstCell.text());
+            assertEquals(2, firstCell.displayWidth());
+            assertEquals(Cell.WIDE_FILLER, secondCell, "Second cell must be a filler to reserve grid space");
+        }
+
+        @Test
+        @DisplayName("Writing a wide character at the edge should wrap entirely to the next line")
+        void writingWideCharAtEdgeWrapsEntirely() {
+            buffer.setCursorPosition(WIDTH - 1, 0); // Last column
+            buffer.write("🔥"); // Emoji occupies 2 columns
+
+            assertEquals(2, buffer.getCursorCol());
+            assertEquals(1, buffer.getCursorRow());
+
+            assertEquals(Cell.EMPTY, buffer.getCellAt(WIDTH - 1, 0, false));
+            assertEquals("🔥", buffer.getCellAt(0, 1, false).text());
+            assertEquals(Cell.WIDE_FILLER, buffer.getCellAt(1, 1, false));
         }
     }
 }
