@@ -38,9 +38,9 @@ public class Line {
     }
 
     public String toStringRepresentation() {
-        StringBuilder sb = new StringBuilder(width);
+        StringBuilder sb = new StringBuilder();
         for (Cell cell : cells) {
-            sb.append(cell.character());
+            sb.append(cell.text());
         }
         return sb.toString();
     }
