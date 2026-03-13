@@ -164,4 +164,55 @@ class TerminalBufferTest {
             assertEquals(Cell.WIDE_FILLER, buffer.getCellAt(1, 1, false));
         }
     }
+
+    @Nested
+    @DisplayName("Screen Resizing Strategy")
+    class ResizeTests {
+
+        @Test
+        @DisplayName("Shrinking height pushes top lines into scrollback")
+        void shrinkingHeightPushesToScrollback() {
+            // Fill the screen
+            for (int i = 0; i < HEIGHT; i++) {
+                buffer.write("Row" + i);
+                if (i < HEIGHT - 1) buffer.setCursorPosition(0, i + 1);
+            }
+
+            // Shrink height from 5 to 3
+            buffer.resize(WIDTH, 3);
+
+            // First two lines should go to scrollback
+            assertTrue(buffer.getLineAsString(0, true).startsWith("Row0"));
+            assertTrue(buffer.getLineAsString(1, true).startsWith("Row1"));
+
+            // Remaining lines on screen
+            assertTrue(buffer.getLineAsString(0, false).startsWith("Row2"));
+            assertTrue(buffer.getLineAsString(2, false).startsWith("Row4"));
+        }
+
+        @Test
+        @DisplayName("Shrinking width truncates text; expanding pads with empty spaces")
+        void resizingWidthAdjustsContent() {
+            buffer.write("1234567890"); // Fill row (width = 10)
+
+            // Shrink width to 5
+            buffer.resize(5, HEIGHT);
+            assertEquals("12345", buffer.getLineAsString(0, false));
+
+            // Expand width back to 10 (truncated part is lost)
+            buffer.resize(10, HEIGHT);
+            String expandedLine = buffer.getLineAsString(0, false);
+            assertTrue(expandedLine.startsWith("12345     ")); // Padded with spaces
+        }
+
+        @Test
+        @DisplayName("Cursor is clamped to new screen boundaries after resize")
+        void resizeClampsCursor() {
+            buffer.setCursorPosition(9, 4); // Bottom-right of 10x5 screen
+            buffer.resize(5, 3); // Shrink to 5x3
+
+            assertEquals(4, buffer.getCursorCol(), "Cursor column clamped to max width");
+            assertEquals(2, buffer.getCursorRow(), "Cursor row clamped to max height");
+        }
+    }
 }
