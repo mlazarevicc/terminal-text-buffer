@@ -1,4 +1,4 @@
-package jetbrains.internship;
+package jetbrains.internship.model;
 
 import jetbrains.internship.enums.Style;
 import jetbrains.internship.enums.TerminalColor;

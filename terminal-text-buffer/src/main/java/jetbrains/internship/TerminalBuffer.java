@@ -2,6 +2,8 @@ package jetbrains.internship;
 
 import jetbrains.internship.enums.Style;
 import jetbrains.internship.enums.TerminalColor;
+import jetbrains.internship.model.Cell;
+import jetbrains.internship.model.Line;
 
 import java.util.ArrayDeque;
 import java.util.Deque;

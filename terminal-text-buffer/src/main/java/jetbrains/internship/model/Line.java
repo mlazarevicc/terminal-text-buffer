@@ -1,4 +1,4 @@
-package jetbrains.internship;
+package jetbrains.internship.model;
 
 import java.util.Arrays;
 
