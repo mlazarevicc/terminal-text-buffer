@@ -6,6 +6,7 @@ import jetbrains.internship.enums.TerminalColor;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumSet;
+import java.util.Iterator;
 
 public class TerminalBuffer {
     private final int width;
@@ -131,5 +132,47 @@ public class TerminalBuffer {
     public void clearScreenAndScrollback() {
         clearScreen();
         scrollback.clear();
+    }
+
+    // CONTENT READING
+    public Cell getCellAt(int col, int row, boolean fromScrollback) {
+        if (fromScrollback) {
+            if (row < 0 || row >= scrollback.size()) return Cell.EMPTY;
+            Iterator<Line> it = scrollback.iterator();
+            for(int i = 0; i < row; i++) it.next();
+            return it.next().getCell(col);
+        } else {
+            if (row < 0 || row >= height) return Cell.EMPTY;
+            return getScreenLine(row).getCell(col);
+        }
+    }
+
+    public String getLineAsString(int row, boolean fromScrollback) {
+        if (fromScrollback) {
+            if (row < 0 || row >= scrollback.size()) return "";
+            Iterator<Line> it = scrollback.iterator();
+            for(int i = 0; i < row; i++) it.next();
+            return it.next().toStringRepresentation();
+        } else {
+            if (row < 0 || row >= height) return "";
+            return getScreenLine(row).toStringRepresentation();
+        }
+    }
+
+    public String getScreenContent() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < height; i++) {
+            sb.append(getScreenLine(i).toStringRepresentation()).append(System.lineSeparator());
+        }
+        return sb.toString();
+    }
+
+    public String getFullContent() {
+        StringBuilder sb = new StringBuilder();
+        for (Line line : scrollback) {
+            sb.append(line.toStringRepresentation()).append(System.lineSeparator());
+        }
+        sb.append(getScreenContent());
+        return sb.toString();
     }
 }
