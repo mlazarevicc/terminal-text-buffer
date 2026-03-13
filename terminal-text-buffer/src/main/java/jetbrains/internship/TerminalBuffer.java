@@ -11,12 +11,12 @@ import java.util.EnumSet;
 import java.util.Iterator;
 
 public class TerminalBuffer {
-    private final int width;
-    private final int height;
+    private int width;
+    private int height;
     private final int maxScrollback;
 
     // Ring buffer for O(1) queue access and O(1) scrolling
-    private final Line[] screen;
+    private Line[] screen;
     private int screenTopIndex = 0;
 
     // Deque for scrollback history
@@ -247,5 +247,48 @@ public class TerminalBuffer {
         }
         sb.append(getScreenContent());
         return sb.toString();
+    }
+
+    // RESIZE METHODS
+    private void copyLineData(Line src, Line dest, int copyWidth) {
+        for (int i = 0; i < copyWidth; i++) {
+            dest.setCell(i, src.getCell(i));
+        }
+    }
+
+    public void resize(int newWidth, int newHeight) {
+        if (newWidth < 1 || newHeight < 1) return;
+        if (this.width == newWidth && this.height == newHeight) return;
+
+        Line[] newScreen = new Line[newHeight];
+        for (int i = 0; i < newHeight; i++) newScreen[i] = new Line(newWidth);
+
+        if (newHeight < this.height) {
+            // Preserve top lines removed due to shrinking
+            int linesToPush = this.height - newHeight;
+            for (int i = 0; i < linesToPush; i++) {
+                if (maxScrollback > 0) {
+                    if (scrollback.size() >= maxScrollback) scrollback.removeFirst();
+                    scrollback.addLast(getScreenLine(i));
+                }
+            }
+            for (int i = 0; i < newHeight; i++) {
+                copyLineData(getScreenLine(i + linesToPush), newScreen[i], Math.min(this.width, newWidth));
+            }
+            this.cursorRow = Math.max(0, this.cursorRow - linesToPush);
+        } else {
+            for (int i = 0; i < this.height; i++) {
+                copyLineData(getScreenLine(i), newScreen[i], Math.min(this.width, newWidth));
+            }
+        }
+
+        this.width = newWidth;
+        this.height = newHeight;
+        this.screen = newScreen;
+        this.screenTopIndex = 0;
+
+        // Clamp cursor to screen
+        if (this.cursorCol >= this.width) this.cursorCol = this.width - 1;
+        if (this.cursorRow >= this.height) this.cursorRow = this.height - 1;
     }
 }
