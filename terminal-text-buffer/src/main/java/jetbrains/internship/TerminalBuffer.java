@@ -64,8 +64,8 @@ public class TerminalBuffer {
         return screen[(screenTopIndex + row) % height];
     }
 
-    private Cell createCurrentCell(char c) {
-        return Cell.of(c, currentFg, currentBg, currentStyles);
+    private Cell createCurrentCell(String text, int displayWidth) {
+        return Cell.of(text, displayWidth, currentFg, currentBg, currentStyles);
     }
 
     private void scrollUp() {
@@ -81,12 +81,48 @@ public class TerminalBuffer {
         screenTopIndex = (screenTopIndex + 1) % height;
     }
 
+    /**
+     * Determines the display width of a Unicode code point.
+     * For simplicity:
+     * - CJK Ideographs and emojis take 2 columns.
+     * - All other characters take 1 column.
+     * In real terminals, a POSIX wcwidth() lookup table would be used.
+     */
+    private int getDisplayWidth(int codePoint) {
+        if (codePoint >= 0x4E00 && codePoint <= 0x9FFF) return 2; // CJK Ideographs
+        if (codePoint > 0xFFFF) return 2; // Emojis / Surrogate Pairs
+        return 1; // Regular letters/numbers
+    }
+
     // EDIT METHODS
     public void write(String text) {
-        Line currentLine = getScreenLine(cursorRow);
-        for (char c : text.toCharArray()) {
-            currentLine.setCell(cursorCol, createCurrentCell(c));
-            cursorCol++;
+        // Iterate over actual Unicode code points, not Java chars
+        text.codePoints().forEach(codePoint -> {
+            String symbol = new String(Character.toChars(codePoint));
+            int charWidth = getDisplayWidth(codePoint);
+
+            // Edge case: wide character at the last column
+            if (charWidth == 2 && cursorCol == width - 1) {
+                getScreenLine(cursorRow).setCell(cursorCol, Cell.EMPTY); // Clear leftover
+                cursorCol = 0;
+                cursorRow++;
+                if (cursorRow >= height) {
+                    scrollUp();
+                    cursorRow = height - 1;
+                }
+            }
+
+            Line currentLine = getScreenLine(cursorRow);
+            currentLine.setCell(cursorCol, createCurrentCell(symbol, charWidth));
+
+            if (charWidth == 2) {
+                // Place invisible filler to reserve space for wide char
+                currentLine.setCell(cursorCol + 1, Cell.WIDE_FILLER);
+            }
+
+            cursorCol += charWidth;
+
+            // Standard word wrap
             if (cursorCol >= width) {
                 cursorCol = 0;
                 cursorRow++;
@@ -94,16 +130,36 @@ public class TerminalBuffer {
                     scrollUp();
                     cursorRow = height - 1;
                 }
-                currentLine = getScreenLine(cursorRow);
             }
-        }
+        });
     }
 
     public void insert(String text) {
-        Line currentLine = getScreenLine(cursorRow);
-        for (char c : text.toCharArray()) {
-            currentLine.insertCellAt(cursorCol, createCurrentCell(c));
-            cursorCol++;
+        text.codePoints().forEach(codePoint -> {
+            String symbol = new String(Character.toChars(codePoint));
+            int charWidth = getDisplayWidth(codePoint);
+
+            // Edge case for wide char at the last column
+            if (charWidth == 2 && cursorCol == width - 1) {
+                getScreenLine(cursorRow).setCell(cursorCol, Cell.EMPTY);
+                cursorCol = 0;
+                cursorRow++;
+                if (cursorRow >= height) {
+                    scrollUp();
+                    cursorRow = height - 1;
+                }
+            }
+
+            Line currentLine = getScreenLine(cursorRow);
+
+            // Shift array for wide characters when inserting
+            if (charWidth == 2) {
+                currentLine.insertCellAt(cursorCol, Cell.WIDE_FILLER);
+            }
+            currentLine.insertCellAt(cursorCol, createCurrentCell(symbol, charWidth));
+
+            cursorCol += charWidth;
+
             if (cursorCol >= width) {
                 cursorCol = 0;
                 cursorRow++;
@@ -111,13 +167,28 @@ public class TerminalBuffer {
                     scrollUp();
                     cursorRow = height - 1;
                 }
-                currentLine = getScreenLine(cursorRow);
             }
-        }
+        });
     }
 
-    public void fillLine(char c) {
-        getScreenLine(cursorRow).fill(createCurrentCell(c));
+    public void fillLine(String s) {
+        Line currentLine = getScreenLine(cursorRow);
+        if (s == null || s.isEmpty()) {
+            currentLine.fill(Cell.EMPTY);
+            return;
+        }
+
+        int codePoint = s.codePointAt(0);
+        String symbol = new String(Character.toChars(codePoint));
+        int charWidth = getDisplayWidth(codePoint);
+
+        // Fill entire line with repeated symbol
+        for (int i = 0; i < width; i += charWidth) {
+            currentLine.setCell(i, createCurrentCell(symbol, charWidth));
+            if (charWidth == 2 && i + 1 < width) {
+                currentLine.setCell(i + 1, Cell.WIDE_FILLER);
+            }
+        }
     }
 
     public void insertEmptyLineAtBottom() {
