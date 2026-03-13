@@ -55,4 +55,81 @@ public class TerminalBuffer {
     public void moveCursor(int dCol, int dRow) {
         setCursorPosition(cursorCol + dCol, cursorRow + dRow);
     }
+
+    // HELPER METHODS
+    private Line getScreenLine(int row) {
+        return screen[(screenTopIndex + row) % height];
+    }
+
+    private Cell createCurrentCell(char c) {
+        return Cell.of(c, currentFg, currentBg, currentStyles);
+    }
+
+    private void scrollUp() {
+        Line top = screen[screenTopIndex];
+        if (maxScrollback > 0) {
+            if (scrollback.size() >= maxScrollback) {
+                scrollback.removeFirst(); // Remove the oldest history entry (memory management)
+            }
+            scrollback.addLast(top);
+        }
+        // Replace the top line with a new empty line and move the start of the ring buffer
+        screen[screenTopIndex] = new Line(width);
+        screenTopIndex = (screenTopIndex + 1) % height;
+    }
+
+    // EDIT METHODS
+    public void write(String text) {
+        Line currentLine = getScreenLine(cursorRow);
+        for (char c : text.toCharArray()) {
+            currentLine.setCell(cursorCol, createCurrentCell(c));
+            cursorCol++;
+            if (cursorCol >= width) {
+                cursorCol = 0;
+                cursorRow++;
+                if (cursorRow >= height) {
+                    scrollUp();
+                    cursorRow = height - 1;
+                }
+                currentLine = getScreenLine(cursorRow);
+            }
+        }
+    }
+
+    public void insert(String text) {
+        Line currentLine = getScreenLine(cursorRow);
+        for (char c : text.toCharArray()) {
+            currentLine.insertCellAt(cursorCol, createCurrentCell(c));
+            cursorCol++;
+            if (cursorCol >= width) {
+                cursorCol = 0;
+                cursorRow++;
+                if (cursorRow >= height) {
+                    scrollUp();
+                    cursorRow = height - 1;
+                }
+                currentLine = getScreenLine(cursorRow);
+            }
+        }
+    }
+
+    public void fillLine(char c) {
+        getScreenLine(cursorRow).fill(createCurrentCell(c));
+    }
+
+    public void insertEmptyLineAtBottom() {
+        scrollUp();
+    }
+
+    public void clearScreen() {
+        for (int i = 0; i < height; i++) {
+            screen[i].fill(Cell.EMPTY);
+        }
+        setCursorPosition(0, 0);
+    }
+
+    public void clearScreenAndScrollback() {
+        clearScreen();
+        scrollback.clear();
+    }
 }
